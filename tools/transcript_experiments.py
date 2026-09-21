@@ -89,6 +89,22 @@ def make_client():
     return FakeJevClient.by_text(stand_in)
 
 
+
+def reconstruct_scoped(text: str, store, pointers) -> str:
+    """Substitute only the exact pointer lines the gate emitted for this block.
+
+    jevctx.reconstruct() substitutes ANY pointer-looking text whose id is in the store,
+    including a pointer line quoted verbatim inside kept content (a transcript of a
+    session that uses or discusses jevctx contains such quotes). This variant is the
+    inverse of what admit() actually did.
+    """
+    out = text
+    for pointer in pointers:
+        record = store.get(pointer.id)
+        if record is not None:
+            out = out.replace(format_pointer(pointer) + "\n", record.text, 1)
+    return out
+
 client = make_client()
 
 # ---- filing report, the way save-transcript would print it -------------------
@@ -167,7 +183,8 @@ for line_no, kind, ref, text in records:
     res = admit(text, origin, task_digest=TASK, turn=line_no, client=client,
                 store=store, log=log)
     ok = reconstruct(res.text, store) == text
-    rows.append((line_no, kind, ref, text, res, ok))
+    ok_scoped = reconstruct_scoped(res.text, store, res.pointers) == text
+    rows.append((line_no, kind, ref, text, res, (ok, ok_scoped)))
 
 gated = [r for r in rows if r[4].gated]
 orig = sum(r[4].original_tokens for r in rows)
@@ -178,7 +195,12 @@ print(f"  tokens {orig:,} → {after:,}   saved {orig - after:,} ({(orig - after
 print(f"  pointers {sum(len(r[4].pointers) for r in rows)}   "
       f"tripwire fired {sum(1 for r in rows if r[4].tripwire)}   "
       f"records in store {len(store)}")
-print(f"  every block reconstructs byte-exact from the store: {all(r[5] for r in rows)}")
+lib_fail = [r for r in rows if not r[5][0]]
+print(f"  byte-exact via jevctx.reconstruct(): {not lib_fail}   "
+      f"via scoped reconstruct: {all(r[5][1] for r in rows)}")
+if lib_fail:
+    print(f"  → {len(lib_fail)} block(s) fail only because their KEPT content quotes a pointer line "
+          f"whose id is in the store (lines {[r[0] for r in lib_fail]}); reconstruct() expands the quote.")
 print()
 print(f"  {'line':>4}  {'kind':<22}{'orig':>7}{'after':>7}{'ptrs':>5}  tripwire")
 for line_no, kind, _ref, _text, res, _ok in sorted(gated, key=lambda r: -(r[4].saved_tokens))[:12]:
@@ -203,8 +225,9 @@ for th in (0.1, 0.35, 0.6, 0.9):
 # ---- C. persistence round trip ----------------------------------------------
 rule("C. JsonlStore survives a restart (append-only, like a chunk)")
 reopened = JsonlStore(OUT / "store.jsonl")
-ok_all = all(reconstruct(res.text, reopened) == text for _, _, _, text, res, _ in rows)
-print(f"  reopened store records {len(reopened)}   byte-exact reconstruct after reload {ok_all}")
+ok_all = all(reconstruct_scoped(res.text, reopened, res.pointers) == text
+             for _, _, _, text, res, _ in rows)
+print(f"  reopened store records {len(reopened)}   scoped byte-exact reconstruct after reload {ok_all}")
 print(f"  store file bytes {(OUT / 'store.jsonl').stat().st_size:,}   "
       f"shadow log bytes {(OUT / 'shadow.jsonl').stat().st_size:,}")
 
