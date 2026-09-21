@@ -21,8 +21,18 @@ from collections import Counter
 from pathlib import Path
 
 from jevctx import (
-    FakeJevClient, HttpJevClient, InMemoryStore, JsonlStore, Origin, ShadowLog,
-    admit, estimate_tokens, format_pointer, reconstruct, retrieve, segment,
+    FakeJevClient,
+    HttpJevClient,
+    InMemoryStore,
+    JsonlStore,
+    Origin,
+    ShadowLog,
+    admit,
+    estimate_tokens,
+    format_pointer,
+    reconstruct,
+    retrieve,
+    segment,
 )
 from jevctx.store import summarise
 from jevctx.types import PRICE_PER_INPUT_TOKEN, Record, content_id
@@ -183,7 +193,7 @@ ptr = next((p for r in gated for p in r[4].pointers), None)
 if ptr is not None:
     print(f"  example pointer: {format_pointer(ptr)[:120]}…")
 
-print(f"\n  replay of the logged scores at other thresholds (no re-run, no Jev calls):")
+print("\n  replay of the logged scores at other thresholds (no re-run, no Jev calls):")
 print(f"  {'threshold':<12}{'kept':>8}{'elided':>9}{'tokens saved':>15}")
 for th in (0.1, 0.35, 0.6, 0.9):
     st = log.replay(th)
