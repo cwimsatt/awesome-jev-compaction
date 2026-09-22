@@ -80,8 +80,12 @@ def stand_in(text: str) -> float:
 
 
 def make_client():
-    if os.environ.get("TYPESAFE_API_KEY"):
-        print("✓ TYPESAFE_API_KEY found — running against real Jev")
+    key = os.environ.get("TYPESAFE_API_KEY")
+    if key:
+        if key == "proxy-attached":
+            print("✓ auth via proxy-attached credential — running against real Jev")
+        else:
+            print("✓ TYPESAFE_API_KEY found — running against real Jev")
         return HttpJevClient()
     print("! No TYPESAFE_API_KEY — scripted stand-in (keyword heuristic, NOT Jev's judgement).")
     print("  Mechanics (segmentation, relocation, byte-exact expand, logging, replay) are real;")
@@ -186,6 +190,12 @@ for line_no, kind, ref, text in records:
     ok_scoped = reconstruct_scoped(res.text, store, res.pointers) == text
     rows.append((line_no, kind, ref, text, res, (ok, ok_scoped)))
 
+# A failed Jev request fails open to score 1.0 (on_error="keep" inside admit()); catch it so a
+# silent default never masquerades as a real "keep everything" answer.
+_failed = [(r[0], s) for r in rows for s in r[4].scores if s.failed]
+if _failed:
+    raise SystemExit(f"Jev scoring failed inside admit() at L{_failed[0][0]}: {_failed[0][1].error}")
+
 gated = [r for r in rows if r[4].gated]
 orig = sum(r[4].original_tokens for r in rows)
 after = sum(r[4].result_tokens for r in rows)
@@ -222,6 +232,11 @@ for th in (0.1, 0.35, 0.6, 0.9):
     print(f"  {th:<12.2f}{st.by_action['kept']:>8}{st.by_action['elided']:>9}"
           f"{st.elided_tokens:>15,}")
 
+_b_usage = getattr(client, "usage", None)
+if _b_usage is not None:
+    print(f"\n  [usage] section B: Jev requests {_b_usage.requests}  "
+          f"input_tokens {_b_usage.input_tokens:,}  output_tokens {_b_usage.output_tokens:,}")
+
 # ---- C. persistence round trip ----------------------------------------------
 rule("C. JsonlStore survives a restart (append-only, like a chunk)")
 reopened = JsonlStore(OUT / "store.jsonl")
@@ -242,22 +257,31 @@ for line_no, kind, ref, text in records:
                    tokens=estimate_tokens(text), created_turn=line_no))
 probe = client
 before_calls = len(getattr(probe, "calls", []))
+usage = getattr(probe, "usage", None)
+req0 = usage.requests if usage else 0
+in0 = usage.input_tokens if usage else 0
 rlog = ShadowLog(path=None)
 digest = mem.digest(budget_tokens=24_000)
 hits = retrieve(TASK, turn=N + 1, client=probe, store=mem, log=rlog, k=5, threshold=0.5)
-calls = getattr(probe, "calls", [])[before_calls:]
-state_tokens = sum(estimate_tokens(c.state) for c in calls)
-q_tokens = sum(estimate_tokens(q.to_payload()) for c in calls for q in c.questions.values())
+calls = getattr(probe, "calls", [])[before_calls:]  # only the stand-in records per-call state
 full_tokens = sum(r.tokens for r in mem.all_records())
 print(f"  memory records {len(mem)} ({full_tokens:,} tok of verbatim text)")
 print(f"  digest entries that fit the 24k-token window {len(digest)} "
       f"(most recent first; {len(mem) - len(digest)} dropped)")
-print(f"  Jev requests {len(calls)}   state tokens {state_tokens:,}   "
-      f"question tokens {q_tokens:,} (repo docstrings say questions are not billed)")
-print(f"  est. cost, state only {usd(state_tokens)}   if questions were billed too "
-      f"{usd(state_tokens + q_tokens)}")
-print(f"  vs. putting the verbatim text itself in state: {full_tokens:,} tok ≈ {usd(full_tokens)}")
-print(f"  vs. re-reading the whole raw ledger with the host model: "
+if usage is not None:
+    # retrieve() scores the digest with on_error="keep"; if a request failed open it would make
+    # no successful call and record no usage. Catch that rather than report a silent 1.0 ranking.
+    if digest and usage.requests == req0:
+        raise SystemExit("retrieve() made no Jev request (silent fail-open) — aborting")
+    print(f"  Jev requests {usage.requests - req0}   input_tokens {usage.input_tokens - in0:,}  "
+          f"(measured from the API)")
+else:
+    state_tokens = sum(estimate_tokens(c.state) for c in calls)
+    q_tokens = sum(estimate_tokens(q.to_payload()) for c in calls for q in c.questions.values())
+    print(f"  Jev requests {len(calls)}   state tokens {state_tokens:,}   "
+          f"question tokens {q_tokens:,} (stand-in, not real usage)")
+print(f"  estimate — verbatim text itself in state: {full_tokens:,} tok ≈ {usd(full_tokens)}")
+print(f"  estimate — re-reading the whole raw ledger with the host model: "
       f"{estimate_tokens(raw_text):,} tok per read")
 print(f"\n  top-{len(hits)} verbatim memories for the task, cited by save-transcript span:")
 for r in hits:

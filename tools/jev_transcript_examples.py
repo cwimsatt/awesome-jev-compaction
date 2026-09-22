@@ -156,12 +156,24 @@ class ReadingsClient(FakeJevClient):
 
 
 def make_client(readings: Mapping[str, float] | None):
-    if os.environ.get("TYPESAFE_API_KEY"):
+    key = os.environ.get("TYPESAFE_API_KEY")
+    if key:
         from jevctx import HttpJevClient
-        print("✓ TYPESAFE_API_KEY found — judgments below are REAL Jev answers")
+        if key == "proxy-attached":
+            print("✓ auth via proxy-attached credential — judgments below are REAL Jev answers")
+        else:
+            print("✓ TYPESAFE_API_KEY found — judgments below are REAL Jev answers")
         return HttpJevClient(), "jev"
     print("! No TYPESAFE_API_KEY — judgments below are the analyst's READINGS (not Jev), driving real jevctx code")
     return ReadingsClient(readings or {}), "readings"
+
+
+def _print_usage(client) -> None:
+    """Print the real client's API usage. A failed request would have raised, not defaulted to 1.0."""
+    usage = getattr(client, "usage", None)
+    if usage is not None:
+        print(f"  [usage] Jev requests {usage.requests}  input_tokens {usage.input_tokens:,}  "
+              f"output_tokens {usage.output_tokens:,}")
 
 
 def rule(title: str) -> None:
@@ -248,13 +260,13 @@ def example_retrieval(blocks: list[Block], chunk_name: str, query: str, client, 
     all_state = sum(estimate_tokens(build_state(query, items[k:k + 32], [f"i{j}" for j in range(len(items[k:k + 32]))]))
                     for k in range(0, len(items), 32))
     print(f"  memory records {len(mem)}  ->  BM25 prefilter {len(cands)} candidates  ->  {n_req} Jev request(s), "
-          f"{all_state:,} state tokens in total")
+          f"{all_state:,} state tokens in total (computed from the batch plan, not measured; see [usage] below)")
     print(f"  first request: state tokens {estimate_tokens(state):,}   questions {len(first)} × ~{estimate_tokens(RETRIEVE_Q.to_payload()):,} tok")
     print("\n  the state Jev sees (verbatim, one-line summaries with provenance):")
     show_json(state, 2600)
     print("\n  one of the 32 questions (they differ only in the item ref):")
     show_json({"i0": {**RETRIEVE_Q.to_payload(), "instructions": "Considering item i0 only: " + RETRIEVE_Q.instructions}})
-    results = score_items(client, query, items, RETRIEVE_Q)
+    results = score_items(client, query, items, RETRIEVE_Q, on_error="raise")
     by_line = {r.created_turn: r for r in cands}
     ranked = sorted(zip(results, items, strict=True), key=lambda p: -p[0].score)
     print(f"\n  answers ({source}):")
@@ -322,7 +334,8 @@ def example_evidence_gate(blocks: list[Block], chunk_name: str, ev_lines: list[i
         print(f"\n  ── L{ln} tool_result[{b.tool}]  {len(b.text):,} chars, {estimate_tokens(b.text):,} tok; the audit flattener keeps 1,500 chars")
         # block-level: one question over the head of the block
         head_item = ScoreItem(id=f"blk:{ln}", text=f"L{ln} " + b.text[:1500], tokens=estimate_tokens(b.text[:1500]))
-        blk = score_items(client, "verification audit of this session", [head_item], BLOCK_EVIDENCE_Q)[0]
+        blk = score_items(client, "verification audit of this session", [head_item], BLOCK_EVIDENCE_Q,
+                          on_error="raise")[0]
         print(f"  block-level p(evidence) = {blk.score:.2f} ({source})")
         if blk.score < 0.5:
             print("  → relocate the WHOLE block behind one pointer; the audit cites it by chunk:line only:")
@@ -338,6 +351,9 @@ def example_evidence_gate(blocks: list[Block], chunk_name: str, ev_lines: list[i
                     client=_SpanPrefixed(client, ln, spans),
                     store=store, log=log, config=cfg)
         by_id = {r.item_id: r for r in res.scores}
+        failed = [r for r in res.scores if r.failed]
+        if failed:
+            raise SystemExit(f"Jev scoring failed inside admit() at L{ln}: {failed[0].error}")
         print(f"  {'span':>9} {'kind':<10}{'tok':>6}  {'p(need)':>7}  action   first line")
         for s in segs:
             sc = by_id[s.id].score
@@ -496,14 +512,18 @@ def main() -> int:
     ints = lambda s: [int(x) for x in s.split(",") if x.strip()]  # noqa: E731
     example_retrieval(blocks, chunk_name, args.query, client, source, readings, prefilter=args.prefilter,
                       expect_lines=ints(args.expect_lines) or None)
+    _print_usage(client)
     if args.evidence_lines:
         if source == "readings":
             client.table = (readings or {}).get("evidence", {})
         example_evidence_gate(blocks, chunk_name, ints(args.evidence_lines), client, source)
+        _print_usage(client)
     if args.audit_lines:
         example_audit_screen(blocks, ints(args.audit_lines), readings, client, source)
+        _print_usage(client)
     if args.checkpoints:
         example_phase(blocks, ints(args.checkpoints), readings, client, source)
+        _print_usage(client)
     return 0
 
 
