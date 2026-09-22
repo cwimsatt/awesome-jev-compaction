@@ -1,0 +1,81 @@
+✓ auth via proxy-attached credential — running against real Jev
+
+0. The corpus (filing-report style)
+──────────────────────────────────────────────────────────────────────────────
+  file   transcript_snapshot.jsonl
+  lines  904    bytes 4,685,825    md5 706345bd56deb2da85b3262bff9c4e15
+  save-transcript would file this span as transcript_chunk_lines_1-904.jsonl
+  estimate_tokens(whole file) = 1,333,780
+
+A. segment() on the raw .jsonl as one blob (no transcript awareness)
+──────────────────────────────────────────────────────────────────────────────
+  segments 407   kinds {'text': 407}   lossless tiling True
+  oversized 0   split 407
+  largest segment 58,043 tok at lines (28, 28)
+  → the raw ledger is opaque to the splitter: every segment is kind 'text', cut only by
+    token size. A transcript adapter has to cut at record / content-block boundaries.
+
+B. admit() per content block (what a transcript-aware gate would do live)
+──────────────────────────────────────────────────────────────────────────────
+  content blocks 384   gated (≥400 tok) 115   passed through small 269
+  tokens 290,937 → 279,097   saved 11,840 (4%)
+  pointers 140   tripwire fired 16   records in store 138
+  byte-exact via jevctx.reconstruct(): False   via scoped reconstruct: True
+  → 3 block(s) fail only because their KEPT content quotes a pointer line whose id is in the store (lines [154, 182, 260]); reconstruct() expands the quote.
+
+  line  kind                     orig  after ptrs  tripwire
+   659  user_text              32,647 30,569    2  -
+   577  tool_result             4,575  2,669    2  -
+   891  tool_result             2,607  1,329    7  -
+   167  tool_result             5,076  3,848    1  -
+   219  tool_result             2,314  1,626    2  -
+   101  tool_result             4,684  4,030    3  -
+   355  tool_result             2,743  2,130    3  -
+   253  tool_result               935    341    1  -
+   217  tool_result             2,956  2,394    4  -
+    77  tool_result             4,803  4,287    3  -
+   117  tool_result             2,237  1,973    1  -
+   442  tool_result             3,409  3,210    1  -
+
+  segment kinds the splitter assigned inside gated blocks: {'text': 767, 'table': 48, 'json': 62, 'code': 219}
+  example pointer: [[elided id=r:f783dfd6 lines=1-4 tokens=49 "Base directory for this skill:…"]]…
+
+  replay of the logged scores at other thresholds (no re-run, no Jev calls):
+  threshold       kept   elided   tokens saved
+  0.10            1076       20            158
+  0.35             642      454         44,038
+  0.60             254      842        178,781
+  0.90               6     1090        262,585
+
+  [usage] section B: Jev requests 122  input_tokens 457,568  output_tokens 19,504
+
+C. JsonlStore survives a restart (append-only, like a chunk)
+──────────────────────────────────────────────────────────────────────────────
+  reopened store records 138   scoped byte-exact reconstruct after reload True
+  store file bytes 113,931   shadow log bytes 555,300
+
+D. retrieve() over the transcript as a memory store (the verbatim-memories shape)
+──────────────────────────────────────────────────────────────────────────────
+  memory records 384 (290,937 tok of verbatim text)
+  digest entries that fit the 24k-token window 384 (most recent first; 0 dropped)
+  Jev requests 14   input_tokens 56,268  (measured from the API)
+  estimate — verbatim text itself in state: 290,937 tok ≈ $0.012219
+  estimate — re-reading the whole raw ledger with the host model: 1,333,780 tok per read
+
+  top-5 verbatim memories for the task, cited by save-transcript span:
+    transcript_chunk_lines_1-904.jsonl:L659  user_text            'Base directory for this skill: /tmp/claude-0/bundled-skills/2.1.28…'
+    transcript_chunk_lines_1-904.jsonl:L3    user_text            'compare this repository to my save-transcript and…'
+    transcript_chunk_lines_1-904.jsonl:L25   tool_result          'Launching skill: anthropic-skills:save-transcript'
+    transcript_chunk_lines_1-904.jsonl:L106  tool_result          'jevctx — Jev for agent memory and context compaction'
+    transcript_chunk_lines_1-904.jsonl:L113  tool_result          '=== search for verbatim-memories anywhere ==='
+
+E. search() prefilter, then Jev rerank (what scales past the 24k digest window)
+──────────────────────────────────────────────────────────────────────────────
+  BM25 candidates 20 → one Jev request of ≤32 questions
+    transcript_chunk_lines_1-904.jsonl:L26   user_text            'Base directory for this skill: /root/.claude/skills/synced/44baa81…'
+    transcript_chunk_lines_1-904.jsonl:L151  tool_use:Bash        'SCR="/tmp/claude-0/-home-user-awesome-jev-compaction/6406aa83-8888…'
+    transcript_chunk_lines_1-904.jsonl:L295  tool_use:Bash        'SCR="/tmp/claude-0/-home-user-awesome-jev-compaction/6406aa83-8888…'
+    transcript_chunk_lines_1-904.jsonl:L319  assistant_text       'This session and the child both run in the environment named…'
+    transcript_chunk_lines_1-904.jsonl:L259  tool_use:Bash        'SCR="/tmp/claude-0/-home-user-awesome-jev-compaction/6406aa83-8888…'
+
+Done.

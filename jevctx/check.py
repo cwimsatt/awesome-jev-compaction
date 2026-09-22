@@ -80,7 +80,10 @@ def run_check(client_factory: Callable[[], JevClient] | None = None) -> int:
             _dim(f"export {ENV_VAR}=... and run this again.")
             _dim("Without a key everything still runs offline: python demo.py")
             return 2
-        print(f"  key       {_DIM}{ENV_VAR} = {key[:6]}…{key[-4:]}{_OFF}")
+        if key == "proxy-attached":
+            print(f"  auth      {_DIM}via proxy-attached credential (key not visible to this session){_OFF}")
+        else:
+            print(f"  key       {_DIM}{ENV_VAR} = {key[:6]}…{key[-4:]}{_OFF}")
 
         from jevctx.jev import HttpJevClient
         client_factory = HttpJevClient

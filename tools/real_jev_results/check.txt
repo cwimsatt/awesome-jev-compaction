@@ -1,0 +1,33 @@
+
+jevctx — live Jev check
+
+  auth      via proxy-attached credential (key not visible to this session)
+  endpoint  https://api.typesafe.ai/v1/systemone
+
+1. three question types in one request
+  ✓ one request, three answers, 1104 ms
+    noul   is_question = 0.98
+    choice topic       = 'build' (confidence 1.00)
+    score  urgency     = 1.30 (confidence 0.50)
+  ✓ all three answer types parsed and are in range
+
+2. the gate on a real tool output
+  ✓ 4 segments scored, 288 ms
+    0.19  npm http fetch GET 200 https://registry.npmjs.org/de
+    0.92  npm ERROR peer react@^18.0.0 required by ui-kit-0, f
+    0.28  npm notice created a lockfile entry for dep-0
+    0.16  added 412 packages, audited 1204 packages in 9s
+  ✓ 639 → 279 tokens (56% smaller), 2 pointer(s)
+
+3. the pointer expands back
+  ✓ expand() returned 1,231 chars; full output reconstructs byte-exact
+
+  usage     2 requests · 2,182 input tokens · $0.000092
+
+Everything works. Drop HttpJevClient() into your agent:
+
+    from jevctx import HttpJevClient, admit, InMemoryStore, ShadowLog
+    result = admit(tool_output, origin, task_digest=..., turn=n,
+                   client=HttpJevClient(), store=store, log=log,
+                   config=GateConfig(shadow_only=True))   # start here
+

@@ -1,0 +1,130 @@
+
+==========================================================================================
+PASS A (default GateConfig): GateConfig(keep_threshold=0.35, min_gate_tokens=400, max_elide_fraction=0.7, protected_kinds=frozenset({'stacktrace', 'diff'}), protected_floor=0.05, shadow_only=False, summary_max_chars=120, max_workers=8)
+==========================================================================================
+
+── app.log  gated=False  113→113 tok  pointers=0  tripwire=-  byte_exact=True  failed_scores=0
+     (not scored) log        2026-03-01T09:14:02Z INFO starting worker pool size=8 2026-0
+     (not scored) log        2026-03-01T09:14:03Z DEBUG cache warm skipped, empty keyspac
+     (not scored) log        2026-03-01T09:14:07Z ERROR failed to enqueue job id=4411 rea
+     (not scored) log        2026-03-01T09:14:20Z INFO retry succeeded for job id=4411
+
+── changes.diff  gated=False  125→125 tok  pointers=0  tripwire=-  byte_exact=True  failed_scores=0
+     (not scored) diff       diff --git a/src/cache.py b/src/cache.py index 1a2b3c4..5d6e
+     (not scored) diff       @@ -10,6 +10,7 @@ class Cache: def __init__(self, size): sel
+     (not scored) diff       @@ -30,3 +31,5 @@ class Cache: def get(self, key): - return 
+
+── config.json  gated=False  33→33 tok  pointers=0  tripwire=-  byte_exact=True  failed_scores=0
+     (not scored) json       { "database": {"host": "db.internal", "port": 5432},
+     (not scored) json       "cache": {"ttl": 300},
+     (not scored) json       "features": ["a", "b", "c"] }
+
+── deps.tsv  gated=False  22→22 tok  pointers=0  tripwire=-  byte_exact=True  failed_scores=0
+     (not scored) table      name version size
+     (not scored) table      react 18.2.0 142kb lodash 4.17.21 71kb axios 1.6.2 52kb
+
+── java_stack.txt  gated=False  81→81 tok  pointers=0  tripwire=-  byte_exact=True  failed_scores=0
+     (not scored) stacktrace java.lang.IllegalStateException: connection pool exhausted a
+
+── js_stack.txt  gated=False  65→65 tok  pointers=0  tripwire=-  byte_exact=True  failed_scores=0
+     (not scored) stacktrace TypeError: Cannot read properties of undefined (reading 'id'
+
+── mixed_log_trace.txt  gated=False  118→118 tok  pointers=0  tripwire=-  byte_exact=True  failed_scores=0
+     (not scored) log        2026-03-01T09:20:01Z INFO handling upload id=9912 2026-03-01
+     (not scored) log        2026-03-01T09:20:02Z ERROR unhandled exception in worker
+     (not scored) stacktrace Traceback (most recent call last): File "/app/worker.py", li
+     (not scored) log        2026-03-01T09:20:02Z INFO worker restarted
+
+── npm_install.log  gated=False  136→136 tok  pointers=0  tripwire=-  byte_exact=True  failed_scores=0
+     (not scored) log        npm http fetch GET 200 https://registry.npmjs.org/react 41ms
+     (not scored) log        npm ERROR code ERESOLVE npm ERROR unable to resolve dependen
+
+── prose.txt  gated=False  101→101 tok  pointers=0  tripwire=-  byte_exact=True  failed_scores=0
+     (not scored) text       The deployment finished without incident. All three regions 
+     (not scored) text       One caveat worth recording: the canary in eu-west-1 took not
+     (not scored) text       No action was taken. The next rollout should watch that regi
+
+── python_traceback.txt  gated=False  115→115 tok  pointers=0  tripwire=-  byte_exact=True  failed_scores=0
+     (not scored) stacktrace Traceback (most recent call last): File "/app/server.py", li
+
+── records.json  gated=False  45→45 tok  pointers=0  tripwire=-  byte_exact=True  failed_scores=0
+     (not scored) json       [ {"id": 1, "name": "alpha", "status": "active"},
+     (not scored) json       {"id": 2, "name": "beta", "status": "suspended"},
+     (not scored) json       {"id": 3, "name": "gamma", "status": "active"} ]
+
+── results.md  gated=False  46→46 tok  pointers=0  tripwire=-  byte_exact=True  failed_scores=0
+     (not scored) table      | package | version | license | | ------- | ------- | ------
+     (not scored) table      | react | 18.2.0 | MIT | | lodash | 4.17.21 | MIT | | axios 
+
+── sample.py  gated=False  72→72 tok  pointers=0  tripwire=-  byte_exact=True  failed_scores=0
+     (not scored) code       import json
+     (not scored) code       def load(path): with open(path) as handle: return json.load(
+     (not scored) code       def save(path, data): with open(path, "w") as handle: json.d
+     (not scored) code       class Store: def __init__(self): self.items = {}
+
+  [usage] PASS A (default GateConfig): requests 0  input_tokens 0  output_tokens 0
+
+==========================================================================================
+PASS B (min_gate_tokens=0): GateConfig(keep_threshold=0.35, min_gate_tokens=0, max_elide_fraction=0.7, protected_kinds=frozenset({'stacktrace', 'diff'}), protected_floor=0.05, shadow_only=False, summary_max_chars=120, max_workers=8)
+==========================================================================================
+
+── app.log  gated=True  113→113 tok  pointers=0  tripwire=max_elide_fraction  byte_exact=True  failed_scores=0
+     0.14       log        2026-03-01T09:14:02Z INFO starting worker pool size=8 2026-0
+     0.12       log        2026-03-01T09:14:03Z DEBUG cache warm skipped, empty keyspac
+     0.30       log        2026-03-01T09:14:07Z ERROR failed to enqueue job id=4411 rea
+     0.21       log        2026-03-01T09:14:20Z INFO retry succeeded for job id=4411
+
+── changes.diff  gated=True  125→125 tok  pointers=0  tripwire=-  byte_exact=True  failed_scores=0
+     0.27       diff       diff --git a/src/cache.py b/src/cache.py index 1a2b3c4..5d6e
+     0.21       diff       @@ -10,6 +10,7 @@ class Cache: def __init__(self, size): sel
+     0.17       diff       @@ -30,3 +31,5 @@ class Cache: def get(self, key): - return 
+
+── config.json  gated=True  33→33 tok  pointers=0  tripwire=max_elide_fraction  byte_exact=True  failed_scores=0
+     0.14       json       { "database": {"host": "db.internal", "port": 5432},
+     0.14       json       "cache": {"ttl": 300},
+     0.16       json       "features": ["a", "b", "c"] }
+
+── deps.tsv  gated=True  22→35 tok  pointers=1  tripwire=-  byte_exact=True  failed_scores=0
+     0.15       table      name version size
+     0.83       table      react 18.2.0 142kb lodash 4.17.21 71kb axios 1.6.2 52kb
+
+── java_stack.txt  gated=True  81→81 tok  pointers=0  tripwire=-  byte_exact=True  failed_scores=0
+     0.21       stacktrace java.lang.IllegalStateException: connection pool exhausted a
+
+── js_stack.txt  gated=True  65→65 tok  pointers=0  tripwire=-  byte_exact=True  failed_scores=0
+     0.27       stacktrace TypeError: Cannot read properties of undefined (reading 'id'
+
+── mixed_log_trace.txt  gated=True  118→131 tok  pointers=2  tripwire=-  byte_exact=True  failed_scores=0
+     0.22       log        2026-03-01T09:20:01Z INFO handling upload id=9912 2026-03-01
+     0.42       log        2026-03-01T09:20:02Z ERROR unhandled exception in worker
+     0.61       stacktrace Traceback (most recent call last): File "/app/worker.py", li
+     0.14       log        2026-03-01T09:20:02Z INFO worker restarted
+
+── npm_install.log  gated=True  136→136 tok  pointers=0  tripwire=-  byte_exact=True  failed_scores=0
+     0.46       log        npm http fetch GET 200 https://registry.npmjs.org/react 41ms
+     0.73       log        npm ERROR code ERESOLVE npm ERROR unable to resolve dependen
+
+── prose.txt  gated=True  101→101 tok  pointers=0  tripwire=max_elide_fraction  byte_exact=True  failed_scores=0
+     0.15       text       The deployment finished without incident. All three regions 
+     0.27       text       One caveat worth recording: the canary in eu-west-1 took not
+     0.41       text       No action was taken. The next rollout should watch that regi
+
+── python_traceback.txt  gated=True  115→115 tok  pointers=0  tripwire=-  byte_exact=True  failed_scores=0
+     0.38       stacktrace Traceback (most recent call last): File "/app/server.py", li
+
+── records.json  gated=True  45→61 tok  pointers=1  tripwire=-  byte_exact=True  failed_scores=0
+     0.43       json       [ {"id": 1, "name": "alpha", "status": "active"},
+     0.32       json       {"id": 2, "name": "beta", "status": "suspended"},
+     0.38       json       {"id": 3, "name": "gamma", "status": "active"} ]
+
+── results.md  gated=True  46→51 tok  pointers=1  tripwire=-  byte_exact=True  failed_scores=0
+     0.11       table      | package | version | license | | ------- | ------- | ------
+     0.86       table      | react | 18.2.0 | MIT | | lodash | 4.17.21 | MIT | | axios 
+
+── sample.py  gated=True  72→72 tok  pointers=0  tripwire=max_elide_fraction  byte_exact=True  failed_scores=0
+     0.11       code       import json
+     0.12       code       def load(path): with open(path) as handle: return json.load(
+     0.11       code       def save(path, data): with open(path, "w") as handle: json.d
+     0.15       code       class Store: def __init__(self): self.items = {}
+
+  [usage] PASS B (min_gate_tokens=0): requests 13  input_tokens 9,469  output_tokens 613

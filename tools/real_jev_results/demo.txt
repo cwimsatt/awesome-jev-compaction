@@ -1,0 +1,111 @@
+
+  jevctx — Jev for agent memory and context compaction
+  ────────────────────────────────────────────────────────────────────────
+✓ TYPESAFE_API_KEY found — running against real Jev
+
+ACT 1 — Jev bills for state, not for questions
+──────────────────────────────────────────────────────────────────────────
+Jev caps a request at 32 questions and ~32k of state, and charges only
+for input. So the shape that matters is: many questions over ONE state.
+
+  120 items, 8,760 tokens of text
+  4 requests × ≤32 questions
+
+  this shape (chunk in state)         10,340 tok   $0.000434
+  naive (whole corpus each time)      35,040 tok   $0.001472
+  3.4x cheaper, same answers
+
+  This is the one mistake that costs real money, and it is invisible
+  until you look at what you put in `state`. jevctx has a test that
+  asserts every request's state holds exactly the items its questions
+  ask about — no more, no fewer.
+
+ACT 2 — Compact the tail, never the prefix
+──────────────────────────────────────────────────────────────────────────
+Context is [frozen prefix] + [work area]. The prefix only ever grows, so
+the KV cache over it is never invalidated. All churn happens in the tail.
+
+  turn     frozen     work   cached prefix   committed
+  1             8      288          intact           -
+  2             8      576          intact           -
+  3             8      864          intact           -
+  4         1,160        0          intact         yes
+  5         1,160      288          intact           -
+  6         1,160      576          intact           -
+
+  The prefix frozen on turn 0 is byte-identical six turns later.
+  jevctx enforces this at runtime rather than trusting it: the buffer
+  memoises what it last rendered and raises if a commit would change it.
+
+  When is compacting worth it? At 0.1x cache reads and 1.25x writes,
+  100k -> 20k pays back in 3.1 turns.
+  Which is the real lesson: cost almost always says 'compact'. So the
+  question worth asking Jev at a commit point is not 'is it worth it'
+  but 'is this subtask actually finished' — a safety question.
+
+ACT 3 — Relocate, don't delete
+──────────────────────────────────────────────────────────────────────────
+Jev can't write text, which is a feature here: compaction becomes
+extractive. Kept lines are verbatim originals, so memory never contains
+a fact that was hallucinated into it.
+
+  tool output      749 tok
+  after gate       288 tok    (62% smaller)
+
+  [[elided id=r:8506e122 lines=1-21 tokens=364 "npm http fetch GET 200 h
+  npm ERROR peer react@^18.0.0 required by ui-kit-1-0, found 17.0.2
+  npm ERROR peer react@^18.0.0 required by ui-kit-1-1, found 17.0.2
+  npm ERROR peer react@^18.0.0 required by ui-kit-1-2, found 17.0.2
+  ...
+
+  The gate removed nothing. It moved it and left a pointer:
+  expand('r:8506e122') -> 1,271 chars
+  full output reconstructs byte-exact: True
+
+  Register EXPAND_TOOL_SCHEMA with the agent's tools. A gate the agent
+  cannot undo is not safe to turn on. Tool name: 'expand'
+
+ACT 4 — Cheap enough to measure whether you were right
+──────────────────────────────────────────────────────────────────────────
+Every gate decision is logged with its score. When the agent later calls
+expand(), that is ground truth that the gate was too aggressive.
+
+  live threshold 0.35 → false-negative rate 75%
+
+  threshold       kept   elided   tokens saved   still missed
+  0.00              15        0              0              0
+  0.10              15        0              0              0
+  0.35               3       12          1,574              9
+  0.60               3       12          1,574              9
+  0.90               3       12          1,574              9
+
+  Replayed from logged scores — no agent re-run, no extra Jev calls.
+  The rightmost column is what you actually tune on: how many things the
+  agent had to go back for would this threshold still have taken away.
+
+ACT 5 — Failing open
+──────────────────────────────────────────────────────────────────────────
+  Jev unreachable → every item scores 1.0, text passes through untouched
+  output unchanged: True   records written: 0
+
+  An outage must degrade the agent's context to 'uncompacted', never to
+  'silently missing things'. Same reason the gate relocates instead of
+  deleting: every failure mode should cost tokens, not information.
+
+ACT 6 — How you'd actually roll this out
+──────────────────────────────────────────────────────────────────────────
+  GateConfig(shadow_only=True): score everything, log everything,
+  change nothing.
+
+  context modified: False        decisions logged: 5
+  would have elided: 524 tok
+
+  Run it here for a day, replay the log to pick a threshold, then turn
+  it on. Shipping a context gate straight to on is how you lose a week
+  to 'the agent got dumber and nobody knows when'.
+──────────────────────────────────────────────────────────────────────────
+Read jevctx/pipeline.py for the 200 lines that do the work.
+Everything here runs offline, tests included.
+
+Got a real key? python -m jevctx.check verifies it end to end.
+
