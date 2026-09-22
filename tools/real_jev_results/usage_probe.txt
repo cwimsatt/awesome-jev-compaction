@@ -1,0 +1,6 @@
+ questions  input_tokens
+         1         1,414
+         8         1,834
+        32         3,296
+
+→ input_tokens grow with the question count: questions ARE billed as input.
